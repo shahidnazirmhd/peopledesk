@@ -1,0 +1,12 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-socketio>=5.11
+sqlalchemy[asyncio]>=2.0.36
+asyncpg>=0.30
+alembic>=1.14
+pydantic>=2.9
+pydantic-settings>=2.6
+PyJWT>=2.10
+pwdlib[bcrypt]>=0.2.1
+# Only needed when SOCKETIO_REDIS_URL is set (multi-instance deployments)
+redis>=5.0
