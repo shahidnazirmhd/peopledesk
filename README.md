@@ -46,7 +46,7 @@ PeopleDesk is a multi-user employee management app. Several people can work at t
 
 **Automated, executed during development**
 
-* Backend: 56 pytest tests against a real PostgreSQL database (auth, rate limiting, RBAC/403, validation, case-insensitive uniqueness, pagination/search/sort, optimistic locking including a 6-way concurrent race, transactional activity logging, and Socket.IO with real server + real clients).
+* Backend: 60 pytest tests against a real PostgreSQL database (auth, rate limiting, RBAC/403, validation, case-insensitive uniqueness, pagination/search/sort, optimistic locking including a 6-way concurrent race, transactional activity logging, and Socket.IO with real server + real clients).
 * Frontend: 16 unit tests for the real-time cache logic (de-duplication, version ordering, filter/sort handling), TypeScript type-check, production build.
 * **End-to-end in real Chromium with two or more independent browser sessions** — 48 checks covering Tests 1–8 below, including: live employee create/edit sync in both directions, live activity feed, HTTP 403 for a normal user on `/api/users`, HTTP 409 and the conflict UI, forced polling-only mode, a simulated firewall that blocks WebSocket (the app falls back to polling and keeps syncing), network drop, backend restart, and PostgreSQL restart with data intact.
 
@@ -219,7 +219,7 @@ cd frontend && npm install && npm run dev
 
 * **Login** — username + password. Wrong credentials show *"Invalid username or password."*; after 5 failed attempts for a username the API answers 429 with a retry time. The header shows your name, role, live connection status and **Logout** (with confirmation).
 * **Employee Master** (everyone) — search (name, title, department, `EMP-000012` or `12`), department filter, click column headers to sort, page size and pagination, **Add employee**, **Edit**. Columns: Employee ID (auto-generated), Name, Department, Job title, Created, Last updated, Updated by. Rows changed by *someone else* flash briefly.
-* **User Activity** (everyone) — the latest 100 actions, newest first: login, logout, user created, employee created/updated. New rows appear live.
+* **User Activity** (**admins only**; normal users get no menu item, are redirected, and the API returns 403) — the latest 100 actions, newest first: login, logout, user created, employee created/updated. New rows appear live.
 * **User Master** (admins only) — list users; **Add user** (display name, username, password, role). The password is hashed with bcrypt; after creation the details are shown. Usernames are unique case-insensitively. Creating an administrator asks for confirmation.
 * **Creating more users** — sign in as `admin` → User Master → Add user. Password rules: 8–72 characters with upper-case, lower-case and a digit.
 
@@ -247,9 +247,9 @@ Prerequisites: PostgreSQL, backend and frontend running; `admin` / `Admin@123` a
 2. Browser 1: **Add employee** (e.g. Grace Hopper / Engineering / Rear Admiral) → it appears in Browser 2 immediately (highlighted), no refresh.
 3. Browser 2: **Edit** that employee, change the title → Browser 1 shows the new title immediately, with *Updated by* = Test User.
 
-**Test 4 — Real-time activity**
-1. Both browsers open **User Activity**.
-2. Browser 1 creates an employee → a new *Employee created* row appears at the top in Browser 2 immediately.
+**Test 4 — Real-time activity** (User Activity is admin-only, so both watchers must be admins)
+1. Browser 1 = admin on **User Activity**. Browser 2 = a normal user on **Employee Master**. (A normal user has no User Activity menu; `/api/activities` returns 403.)
+2. In Browser 2 edit or create an employee → a new *Employee updated/created* row (username = that user) appears at the top of Browser 1's User Activity immediately. Saving an edit without changing any field records nothing.
 3. Persistence check (optional, SQL): `docker compose exec postgres psql -U appuser -d employee_db -c "select id, username, action, details from activity_logs order by id desc limit 5;"`
 
 **Test 5 — Concurrent update (HTTP 409)**
@@ -314,7 +314,7 @@ Interactive docs: <http://localhost:8000/docs>. Errors always look like `{"error
 | `POST /api/employees` | any user | 201 |
 | `PUT /api/employees/{id}` | any user | body includes `version`; stale → **409** `version_conflict` with the latest record in `details.current` |
 | `GET /api/users` · `POST /api/users` | **admin only** (403 otherwise) | |
-| `GET /api/activities` | any user | latest 100, newest first |
+| `GET /api/activities` | **admin only** (403 otherwise) | latest 100, newest first |
 | `GET /health` | public | DB check |
 
 Database: `users` (case-insensitive unique index on `lower(username)`, role check), `employees` (`version`, `updated_by` FK), `activity_logs` (indexed on `created_at DESC, id DESC`, `user_id`, `action`). Schema is managed by Alembic (`alembic upgrade head`); the app never creates tables itself.
